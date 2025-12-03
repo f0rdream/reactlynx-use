@@ -27,3 +27,5 @@ export type {
   VelocityResult,
 } from './useVelocity.js';
 export { default as useVelocity } from './useVelocity.js';
+export type { CustomPointerEvent, CustomPointerEventMT } from './usePointerEvent.js';
+export { default as usePointerEvent } from './usePointerEvent.js';
