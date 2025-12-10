@@ -101,3 +101,109 @@ describe('usePointerEvent (MT) integration', () => {
     // target/currentTarget may be omitted in test env
   })
 })
+
+describe('usePointerEvent memoization', () => {
+  it('keeps props identity stable when handlers do not change', () => {
+    const onPointerMove = vi.fn()
+    let lastProps: ReturnType<typeof usePointerEvent> | undefined
+
+    const Comp = ({ move }: { move: (e: unknown) => void }) => {
+      const props = usePointerEvent({ onPointerMove: move })
+      lastProps = props
+      return <view {...props}></view>
+    }
+
+    const { rerender } = render(<Comp move={onPointerMove} />)
+    const first = lastProps
+    rerender(<Comp move={onPointerMove} />)
+    expect(lastProps).toBe(first)
+  })
+
+  it('recreates props identity when a handler changes', () => {
+    const onPointerMove1 = vi.fn()
+    const onPointerMove2 = vi.fn()
+    let lastProps: ReturnType<typeof usePointerEvent> | undefined
+
+    const Comp = ({ move }: { move: (e: unknown) => void }) => {
+      const props = usePointerEvent({ onPointerMove: move })
+      lastProps = props
+      return <view {...props}></view>
+    }
+
+    const { rerender } = render(<Comp move={onPointerMove1} />)
+    const first = lastProps!
+    rerender(<Comp move={onPointerMove2} />)
+    expect(lastProps).not.toBe(first)
+    expect(lastProps?.bindmousemove).not.toBe(first.bindmousemove)
+  })
+})
+
+describe('usePointerEvent move triggers', () => {
+  it('BT: onPointerMove triggers on mousemove without press', () => {
+    const onPointerMove = vi.fn()
+    const Comp = () => {
+      const props = usePointerEvent({ onPointerMove })
+      return <view {...props}></view>
+    }
+    const { container } = render(<Comp />)
+    fireEvent.mousemove(container.firstChild, { x: 10, y: 20, pageX: 110, pageY: 120 })
+    expect(onPointerMove).toHaveBeenCalledTimes(1)
+  })
+
+  it('BT: onPointerMove triggers on touchmove', () => {
+    const onPointerMove = vi.fn()
+    const Comp = () => {
+      const props = usePointerEvent({ onPointerMove })
+      return <view {...props}></view>
+    }
+    const { container } = render(<Comp />)
+    fireEvent.touchmove(container.firstChild, { detail: { x: 50, y: 60 }, touches: [{ identifier: 1, pageX: 151, pageY: 161, clientX: 251, clientY: 261 }] })
+    expect(onPointerMove).toHaveBeenCalledTimes(1)
+  })
+
+  it('MT: onPointerMoveMT triggers on mousemove without press', async () => {
+    let mtEventRef: MainThreadRef<CustomPointerEventMT | null>
+    const Comp = () => {
+      mtEventRef = useMainThreadRef<CustomPointerEventMT>(null)
+      const props = usePointerEvent({
+        onPointerMoveMT: (e) => {
+          'main thread'
+          mtEventRef.current = e
+        },
+      })
+      return <view {...props}></view>
+    }
+    const { container } = render(<Comp />)
+    fireEvent.mousemove(container.firstChild, { x: 10, y: 20, pageX: 110, pageY: 120 })
+    const read = runOnMainThread(() => {
+      'main thread'
+      return mtEventRef?.current
+    })
+    const e = await read() as CustomPointerEventMT
+    expect(e?.type).toBe('pointermove')
+    expect(e?.pointerType).toBe('mouse')
+  })
+
+  it('MT: onPointerMoveMT triggers on touchmove', async () => {
+    let mtEventRef: MainThreadRef<CustomPointerEventMT | null>
+    const Comp = () => {
+      mtEventRef = useMainThreadRef<CustomPointerEventMT>(null)
+      const props = usePointerEvent({
+        onPointerMoveMT: (e) => {
+          'main thread'
+          mtEventRef.current = e
+        },
+      })
+      return <view {...props}></view>
+    }
+    const { container } = render(<Comp />)
+    fireEvent.touchmove(container.firstChild, { detail: { x: 50, y: 60 }, touches: [{ identifier: 1, pageX: 151, pageY: 161, clientX: 251, clientY: 261 }] })
+    const read = runOnMainThread(() => {
+      'main thread'
+      return mtEventRef?.current
+    })
+    const e = await read() as CustomPointerEventMT
+    expect(e?.type).toBe('pointermove')
+    expect(e?.pointerType).toBe('touch')
+  })
+})

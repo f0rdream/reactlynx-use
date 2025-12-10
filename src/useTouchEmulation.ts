@@ -1,3 +1,4 @@
+import { useMemo } from '@lynx-js/react'
 import type { MainThread, MouseEvent, Touch, TouchEvent } from '@lynx-js/types'
 
 type TouchAction = 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel'
@@ -23,7 +24,7 @@ function toTouchEvent(
   event: MouseEvent | TouchEvent,
   type: TouchAction,
 ): TouchEvent {
-  const isTouch = 'detail' in event
+  const isTouch = 'touches' in (event as unknown as Record<string, unknown>) || 'changedTouches' in (event as unknown as Record<string, unknown>)
   if (isTouch) return event as TouchEvent
   const mouse = event as MouseEvent
   const touch = {
@@ -47,7 +48,7 @@ function toTouchEventMT(
   type: TouchAction,
 ): MainThread.TouchEvent {
   'main thread'
-  const isTouch = 'detail' in event
+  const isTouch = 'touches' in (event as unknown as Record<string, unknown>) || 'changedTouches' in (event as unknown as Record<string, unknown>)
   if (isTouch) return event as MainThread.TouchEvent
   const mouse = event as MainThread.MouseEvent
   const touch = {
@@ -87,80 +88,108 @@ function useTouchEmulation({
   onTouchEndMT?: (event: MainThread.TouchEvent) => void
   onTouchCancelMT?: (event: MainThread.TouchEvent) => void
 }): UseTouchEmulationReturn {
-  const result: UseTouchEmulationReturn = {}
+  const result = useMemo<UseTouchEmulationReturn>(() => {
+    const r: UseTouchEmulationReturn = {}
 
-  if (onTouchStart) {
-    result.bindtouchstart = (event: TouchEvent) => {
-      onTouchStart(toTouchEvent(event, 'touchstart'))
+    if (onTouchStart) {
+      r.bindtouchstart = (event: TouchEvent) => {
+        onTouchStart(toTouchEvent(event, 'touchstart'))
+      }
+            r.bindmousedown = (event: MouseEvent) => {
+              if (onTouchStart) {
+                onTouchStart(toTouchEvent(event, 'touchstart'))
+              }
+            }
     }
-    result.bindmousedown = (event: MouseEvent) => {
-      onTouchStart(toTouchEvent(event, 'touchstart'))
-    }
-  }
 
-  if (onTouchMove) {
-    result.bindtouchmove = (event: TouchEvent) => {
-      onTouchMove(toTouchEvent(event, 'touchmove'))
+    if (onTouchMove) {
+      r.bindtouchmove = (event: TouchEvent) => {
+        onTouchMove(toTouchEvent(event, 'touchmove'))
+      }
+      r.bindmousemove = (event: MouseEvent) => {
+        const buttons = (event as unknown as { buttons?: number }).buttons
+        // Allow only left-button drags
+        if (!buttons || (buttons & 1) === 0) return
+        onTouchMove(toTouchEvent(event, 'touchmove'))
+      }
     }
-    result.bindmousemove = (event: MouseEvent) => {
-      onTouchMove(toTouchEvent(event, 'touchmove'))
-    }
-  }
 
-  if (onTouchEnd) {
-    result.bindtouchend = (event: TouchEvent) => {
-      onTouchEnd(toTouchEvent(event, 'touchend'))
+    if (onTouchEnd) {
+      r.bindtouchend = (event: TouchEvent) => {
+        onTouchEnd(toTouchEvent(event, 'touchend'))
+      }
+      r.bindmouseup = (event: MouseEvent) => {
+        if (onTouchEnd) {
+          onTouchEnd(toTouchEvent(event, 'touchend'))
+        }
+      }
     }
-    result.bindmouseup = (event: MouseEvent) => {
-      onTouchEnd(toTouchEvent(event, 'touchend'))
-    }
-  }
 
-  if (onTouchCancel) {
-    result.bindtouchend = (event: TouchEvent) => {
-      onTouchCancel(toTouchEvent(event, 'touchcancel'))
+    if (onTouchCancel) {
+      r.bindtouchcancel = (event: TouchEvent) => {
+        onTouchCancel(toTouchEvent(event, 'touchcancel'))
+      }
     }
-  }
 
-  if (onTouchStartMT) {
-    result['main-thread:bindtouchstart'] = (event: MainThread.TouchEvent) => {
-      'main thread'
-      onTouchStartMT(toTouchEventMT(event, 'touchstart'))
-    }
-    result['main-thread:bindmousedown'] = (event: MainThread.MouseEvent) => {
-      'main thread'
-      onTouchStartMT(toTouchEventMT(event, 'touchstart'))
-    }
-  }
+    if (onTouchStartMT) {
+      r['main-thread:bindtouchstart'] = (event: MainThread.TouchEvent) => {
+        'main thread'
+        onTouchStartMT(toTouchEventMT(event, 'touchstart'))
+      }
 
-  if (onTouchMoveMT) {
-    result['main-thread:bindtouchmove'] = (event: MainThread.TouchEvent) => {
-      'main thread'
-      onTouchMoveMT(toTouchEventMT(event, 'touchmove'))
+      r['main-thread:bindmousedown'] = (event: MainThread.MouseEvent) => {
+        'main thread'
+        if (onTouchStartMT) {
+          onTouchStartMT(toTouchEventMT(event, 'touchstart'))
+        }
+      }
     }
-    result['main-thread:bindmousemove'] = (event: MainThread.MouseEvent) => {
-      'main thread'
-      onTouchMoveMT(toTouchEventMT(event, 'touchmove'))
-    }
-  }
 
-  if (onTouchEndMT) {
-    result['main-thread:bindtouchend'] = (event: MainThread.TouchEvent) => {
-      'main thread'
-      onTouchEndMT(toTouchEventMT(event, 'touchend'))
+    if (onTouchMoveMT) {
+      r['main-thread:bindtouchmove'] = (event: MainThread.TouchEvent) => {
+        'main thread'
+        onTouchMoveMT(toTouchEventMT(event, 'touchmove'))
+      }
+      r['main-thread:bindmousemove'] = (event: MainThread.MouseEvent) => {
+        'main thread'
+        const buttons = (event as unknown as { buttons?: number }).buttons
+        // Allow only left-button drags
+        if (!buttons || (buttons & 1) === 0) return
+        onTouchMoveMT(toTouchEventMT(event, 'touchmove'))
+      }
     }
-    result['main-thread:bindmouseup'] = (event: MainThread.MouseEvent) => {
-      'main thread'
-      onTouchEndMT(toTouchEventMT(event, 'touchend'))
-    }
-  }
 
-  if (onTouchCancelMT) {
-    result['main-thread:bindtouchcancel'] = (event: MainThread.TouchEvent) => {
-      'main thread'
-      onTouchCancelMT(toTouchEventMT(event, 'touchend'))
+    if (onTouchEndMT) {
+      r['main-thread:bindtouchend'] = (event: MainThread.TouchEvent) => {
+        'main thread'
+        onTouchEndMT(toTouchEventMT(event, 'touchend'))
+      }
+      r['main-thread:bindmouseup'] = (event: MainThread.MouseEvent) => {
+        'main thread'
+        if (onTouchEndMT) {
+          onTouchEndMT(toTouchEventMT(event, 'touchend'))
+        }
+      }
     }
-  }
+
+    if (onTouchCancelMT) {
+      r['main-thread:bindtouchcancel'] = (event: MainThread.TouchEvent) => {
+        'main thread'
+        onTouchCancelMT(toTouchEventMT(event, 'touchcancel'))
+      }
+    }
+
+    return r
+  }, [
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd,
+    onTouchCancel,
+    onTouchStartMT,
+    onTouchMoveMT,
+    onTouchEndMT,
+    onTouchCancelMT,
+  ])
 
   return result
 }

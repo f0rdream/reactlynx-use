@@ -1,3 +1,4 @@
+import { useMemo } from '@lynx-js/react'
 import type { MainThread, MouseEvent, Touch, TouchEvent } from '@lynx-js/types'
 
 type PointerAction = 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel'
@@ -46,7 +47,9 @@ function unifyPointerEvent(
   event: MouseEvent | TouchEvent,
   type: PointerAction,
 ): CustomPointerEvent {
-  const isTouch = 'detail' in event
+  const isTouch =
+    'touches' in (event as unknown as Record<string, unknown>) ||
+    'changedTouches' in (event as unknown as Record<string, unknown>)
   if (isTouch) {
     const te = event as TouchEvent
     const t: Touch | undefined = te.touches?.[0] ?? te.changedTouches?.[0]
@@ -98,7 +101,9 @@ function unifyPointerEventMT(
   type: PointerAction,
 ): CustomPointerEventMT {
   'main thread'
-  const isTouch = 'detail' in event
+  const isTouch =
+    'touches' in (event as unknown as Record<string, unknown>) ||
+    'changedTouches' in (event as unknown as Record<string, unknown>)
   if (isTouch) {
     const te = event as MainThread.TouchEvent
     const t: Touch | undefined = te.touches?.[0] ?? te.changedTouches?.[0]
@@ -174,80 +179,93 @@ function usePointerEvent({
   onPointerDownMT?: (event: CustomPointerEventMT) => void
   onPointerCancelMT?: (event: CustomPointerEventMT) => void
 }): UsePointerEventReturn {
-  const result: UsePointerEventReturn = {}
+  const result = useMemo<UsePointerEventReturn>(() => {
+    const r: UsePointerEventReturn = {}
 
-  if (onPointerDown) {
-    result.bindmousedown = (event: MouseEvent) => {
-      onPointerDown(unifyPointerEvent(event, 'pointerdown'))
+    if (onPointerDown) {
+      r.bindmousedown = (event: MouseEvent) => {
+        onPointerDown(unifyPointerEvent(event, 'pointerdown'))
+      }
+      r.bindtouchstart = (event: TouchEvent) => {
+        onPointerDown(unifyPointerEvent(event, 'pointerdown'))
+      }
     }
-    result.bindtouchstart = (event: TouchEvent) => {
-      onPointerDown(unifyPointerEvent(event, 'pointerdown'))
-    }
-  }
 
-  if (onPointerMove) {
-    result.bindmousemove = (event: MouseEvent) => {
-      onPointerMove(unifyPointerEvent(event, 'pointermove'))
+    if (onPointerMove) {
+      r.bindmousemove = (event: MouseEvent) => {
+        onPointerMove(unifyPointerEvent(event, 'pointermove'))
+      }
+      r.bindtouchmove = (event: TouchEvent) => {
+        onPointerMove(unifyPointerEvent(event, 'pointermove'))
+      }
     }
-    result.bindtouchmove = (event: TouchEvent) => {
-      onPointerMove(unifyPointerEvent(event, 'pointermove'))
-    }
-  }
 
-  if (onPointerUp) {
-    result.bindmouseup = (event: MouseEvent) => {
-      onPointerUp(unifyPointerEvent(event, 'pointerup'))
+    if (onPointerUp) {
+      r.bindmouseup = (event: MouseEvent) => {
+        onPointerUp(unifyPointerEvent(event, 'pointerup'))
+      }
+      r.bindtouchend = (event: TouchEvent) => {
+        onPointerUp(unifyPointerEvent(event, 'pointerup'))
+      }
     }
-    result.bindtouchend = (event: TouchEvent) => {
-      onPointerUp(unifyPointerEvent(event, 'pointerup'))
-    }
-  }
 
-  if (onPointerCancel) {
-    result.bindtouchcancel = (event: TouchEvent) => {
-      onPointerCancel(unifyPointerEvent(event, 'pointercancel'))
+    if (onPointerCancel) {
+      r.bindtouchcancel = (event: TouchEvent) => {
+        onPointerCancel(unifyPointerEvent(event, 'pointercancel'))
+      }
     }
-  }
 
-  if (onPointerDownMT) {
-    result['main-thread:bindmousedown'] = (event: MainThread.MouseEvent) => {
-      'main thread'
-      onPointerDownMT(unifyPointerEventMT(event, 'pointerdown'))
+    if (onPointerDownMT) {
+      r['main-thread:bindmousedown'] = (event: MainThread.MouseEvent) => {
+        'main thread'
+        onPointerDownMT(unifyPointerEventMT(event, 'pointerdown'))
+      }
+      r['main-thread:bindtouchstart'] = (event: MainThread.TouchEvent) => {
+        'main thread'
+        onPointerDownMT(unifyPointerEventMT(event, 'pointerdown'))
+      }
     }
-    result['main-thread:bindtouchstart'] = (event: MainThread.TouchEvent) => {
-      'main thread'
-      onPointerDownMT(unifyPointerEventMT(event, 'pointerdown'))
-    }
-  }
 
-  if (onPointerMoveMT) {
-    result['main-thread:bindmousemove'] = (event: MainThread.MouseEvent) => {
-      'main thread'
-      onPointerMoveMT(unifyPointerEventMT(event, 'pointermove'))
+    if (onPointerMoveMT) {
+      r['main-thread:bindmousemove'] = (event: MainThread.MouseEvent) => {
+        'main thread'
+        onPointerMoveMT(unifyPointerEventMT(event, 'pointermove'))
+      }
+      r['main-thread:bindtouchmove'] = (event: MainThread.TouchEvent) => {
+        'main thread'
+        onPointerMoveMT(unifyPointerEventMT(event, 'pointermove'))
+      }
     }
-    result['main-thread:bindtouchmove'] = (event: MainThread.TouchEvent) => {
-      'main thread'
-      onPointerMoveMT(unifyPointerEventMT(event, 'pointermove'))
-    }
-  }
 
-  if (onPointerUpMT) {
-    result['main-thread:bindmouseup'] = (event: MainThread.MouseEvent) => {
-      'main thread'
-      onPointerUpMT(unifyPointerEventMT(event, 'pointerup'))
+    if (onPointerUpMT) {
+      r['main-thread:bindmouseup'] = (event: MainThread.MouseEvent) => {
+        'main thread'
+        onPointerUpMT(unifyPointerEventMT(event, 'pointerup'))
+      }
+      r['main-thread:bindtouchend'] = (event: MainThread.TouchEvent) => {
+        'main thread'
+        onPointerUpMT(unifyPointerEventMT(event, 'pointerup'))
+      }
     }
-    result['main-thread:bindtouchend'] = (event: MainThread.TouchEvent) => {
-      'main thread'
-      onPointerUpMT(unifyPointerEventMT(event, 'pointerup'))
-    }
-  }
 
-  if (onPointerCancelMT) {
-    result['main-thread:bindtouchcancel'] = (event: MainThread.TouchEvent) => {
-      'main thread'
-      onPointerCancelMT(unifyPointerEventMT(event, 'pointercancel'))
+    if (onPointerCancelMT) {
+      r['main-thread:bindtouchcancel'] = (event: MainThread.TouchEvent) => {
+        'main thread'
+        onPointerCancelMT(unifyPointerEventMT(event, 'pointercancel'))
+      }
     }
-  }
+
+    return r
+  }, [
+    onPointerDown,
+    onPointerUp,
+    onPointerMove,
+    onPointerCancel,
+    onPointerUpMT,
+    onPointerMoveMT,
+    onPointerDownMT,
+    onPointerCancelMT,
+  ])
 
   return result
 }
